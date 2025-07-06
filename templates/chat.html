@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Help Desk Bot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <div class="chat-container">
+    <header>
+      <h1>💼 IT Help Desk Assistant</h1>
+    </header>
+
+    <main>
+      <div id="chatbox" class="chat-box"></div>
+      
+      <form id="chat-form" autocomplete="off">
+        <input type="text" id="user-input" placeholder="Type your IT issue..." required />
+        <button type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
