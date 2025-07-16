@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+
+{% block title %}Pingpal - Intelligent IT Support{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <!-- Hero Section -->
+    <div class="row align-items-center mb-5">
+        <div class="col-lg-6">
+            <div class="d-flex align-items-center mb-4">
+                <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Pingpal Logo" class="hero-logo me-3">
+                <h1 class="display-4 fw-bold text-primary mb-0">
+                    Pingpal
+                </h1>
+            </div>
+            <p class="lead mb-4">
+                Get intelligent IT support through an AI-powered chat interface. 
+                Troubleshoot issues, run diagnostics, and get step-by-step guidance 
+                for Windows, macOS, and Linux systems.
+            </p>
+            <div class="d-flex gap-3">
+                <a href="{{ url_for('chat') }}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-comments me-2"></i>Start Chat
+                </a>
+                <button class="btn btn-outline-secondary btn-lg" onclick="showSystemInfo()">
+                    <i class="fas fa-info-circle me-2"></i>System Info
+                </button>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card shadow-lg">
+                <div class="card-body p-4">
+                    <h5 class="card-title text-primary">
+                        <i class="fas fa-chart-line me-2"></i>Quick System Overview
+                    </h5>
+                    <div id="system-overview">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading system information...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="text-center mb-5">Features</h2>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-brain fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title">AI-Powered Support</h5>
+                    <p class="card-text">
+                        Advanced GPT-4o integration for intelligent problem understanding 
+                        and step-by-step troubleshooting guidance.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
+                    <h5 class="card-title">Secure Commands</h5>
+                    <p class="card-text">
+                        Safe system command execution with comprehensive security validation 
+                        and whitelisted operations only.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body text-center">
+                    <i class="fas fa-network-wired fa-3x text-info mb-3"></i>
+                    <h5 class="card-title">Network Diagnostics</h5>
+                    <p class="card-text">
+                        Comprehensive network troubleshooting tools including ping tests, 
+                        DNS resolution, and connectivity diagnostics.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- OS Support Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="text-center mb-5">Cross-Platform Support</h2>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-primary">
+                <div class="card-body text-center">
+                    <i class="fab fa-windows fa-3x text-primary mb-3"></i>
+                    <h5 class="card-title">Windows</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>System diagnostics</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Network troubleshooting</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Process management</li>
+                        <li><i class="fas fa-check text-success me-2"></i>File system checks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-info">
+                <div class="card-body text-center">
+                    <i class="fab fa-apple fa-3x text-info mb-3"></i>
+                    <h5 class="card-title">macOS</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>System profiling</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Network diagnostics</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Disk utilities</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Process monitoring</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100 border-warning">
+                <div class="card-body text-center">
+                    <i class="fab fa-linux fa-3x text-warning mb-3"></i>
+                    <h5 class="card-title">Linux</h5>
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check text-success me-2"></i>System monitoring</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Network tools</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Process management</li>
+                        <li><i class="fas fa-check text-success me-2"></i>Resource usage</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions Section -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <h2 class="text-center mb-5">Quick Actions</h2>
+        </div>
+        <div class="col-md-6 mb-3">
+            <button class="btn btn-outline-primary w-100 py-3" onclick="runNetworkTest()">
+                <i class="fas fa-wifi me-2"></i>Run Network Diagnostics
+            </button>
+        </div>
+        <div class="col-md-6 mb-3">
+            <button class="btn btn-outline-success w-100 py-3" onclick="showSystemInfo()">
+                <i class="fas fa-server me-2"></i>Get System Information
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- System Info Modal -->
+<div class="modal fade" id="systemInfoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-server me-2"></i>System Information
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="system-info-content">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Loading system information...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Network Test Modal -->
+<div class="modal fade" id="networkTestModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-wifi me-2"></i>Network Diagnostics
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="network-test-content">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2">Running network diagnostics...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Load system overview on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadSystemOverview();
+});
+
+function loadSystemOverview() {
+    fetch('/api/system-info')
+        .then(response => response.json())
+        .then(data => {
+            const overview = document.getElementById('system-overview');
+            if (data.error) {
+                overview.innerHTML = `
+                    <div class="text-center text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Error loading system information</p>
+                    </div>
+                `;
+            } else {
+                overview.innerHTML = `
+                    <div class="row">
+                        <div class="col-6">
+                            <p><strong>OS:</strong> ${data.os_type}</p>
+                            <p><strong>Architecture:</strong> ${data.system_info.architecture}</p>
+                        </div>
+                        <div class="col-6">
+                            <p><strong>CPU Cores:</strong> ${data.system_info.cpu_count}</p>
+                            <p><strong>Memory:</strong> ${formatBytes(data.system_info.memory_total)}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('system-overview').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Error loading system information</p>
+                </div>
+            `;
+        });
+}
+
+function showSystemInfo() {
+    const modal = new bootstrap.Modal(document.getElementById('systemInfoModal'));
+    modal.show();
+    
+    fetch('/api/system-info')
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('system-info-content');
+            if (data.error) {
+                content.innerHTML = `
+                    <div class="text-center text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Error: ${data.error}</p>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>System Information</h6>
+                            <p><strong>OS:</strong> ${data.os_type}</p>
+                            <p><strong>Architecture:</strong> ${data.system_info.architecture}</p>
+                            <p><strong>Processor:</strong> ${data.system_info.processor}</p>
+                            <p><strong>Hostname:</strong> ${data.system_info.hostname}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Resources</h6>
+                            <p><strong>CPU Cores:</strong> ${data.system_info.cpu_count}</p>
+                            <p><strong>Total Memory:</strong> ${formatBytes(data.system_info.memory_total)}</p>
+                            <p><strong>Available Memory:</strong> ${formatBytes(data.system_info.memory_available)}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('system-info-content').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Error loading system information</p>
+                </div>
+            `;
+        });
+}
+
+function runNetworkTest() {
+    const modal = new bootstrap.Modal(document.getElementById('networkTestModal'));
+    modal.show();
+    
+    fetch('/api/network-test')
+        .then(response => response.json())
+        .then(data => {
+            const content = document.getElementById('network-test-content');
+            if (data.error) {
+                content.innerHTML = `
+                    <div class="text-center text-danger">
+                        <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                        <p>Error: ${data.error}</p>
+                    </div>
+                `;
+            } else {
+                content.innerHTML = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Internet Connectivity</h6>
+                            ${Object.entries(data.connectivity || {}).map(([host, result]) => `
+                                <p><strong>${host}:</strong> 
+                                    <span class="badge ${result.success ? 'bg-success' : 'bg-danger'}">
+                                        ${result.success ? 'Connected' : 'Failed'}
+                                    </span>
+                                </p>
+                            `).join('')}
+                        </div>
+                        <div class="col-md-6">
+                            <h6>DNS Resolution</h6>
+                            ${Object.entries(data.dns || {}).map(([domain, result]) => `
+                                <p><strong>${domain}:</strong> 
+                                    <span class="badge ${result.success ? 'bg-success' : 'bg-danger'}">
+                                        ${result.success ? 'Resolved' : 'Failed'}
+                                    </span>
+                                </p>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('network-test-content').innerHTML = `
+                <div class="text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Error running network diagnostics</p>
+                </div>
+            `;
+        });
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+</script>
+{% endblock %} 
