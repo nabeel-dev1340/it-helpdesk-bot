@@ -1,6 +1,7 @@
 import openai
 import logging
 from config import Config
+from modules.automated_diagnostics import AutomatedDiagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -12,10 +13,12 @@ class ChatHandler:
         try:
             self.client = openai.OpenAI(api_key=Config.OPENAI_API_KEY)
             self.conversation_history = {}
+            self.automated_diagnostics = AutomatedDiagnostics()
         except Exception as e:
             logger.error(f"Error initializing OpenAI client: {str(e)}")
             self.client = None
             self.conversation_history = {}
+            self.automated_diagnostics = AutomatedDiagnostics()
         
     def process_message(self, user_message, os_type):
         """Process user message with GPT-4o and return intelligent response"""
@@ -52,6 +55,9 @@ class ChatHandler:
             
             bot_response = response.choices[0].message.content
             
+            # Add diagnostic suggestions if appropriate
+            bot_response = self._add_diagnostic_suggestions(bot_response, user_message)
+            
             # Store in conversation history
             self._update_conversation_history(user_message, bot_response)
             
@@ -71,6 +77,7 @@ Your role is to:
 3. Suggest appropriate system commands for {os_type}
 4. Ask clarifying questions when needed
 5. Maintain a helpful and professional tone
+6. Proactively suggest automated diagnostics when appropriate
 
 IMPORTANT: Format your responses beautifully using markdown:
 - Use **bold** for important points and section headers
@@ -80,6 +87,17 @@ IMPORTANT: Format your responses beautifully using markdown:
 - Use emojis sparingly to make responses friendly
 - Structure responses with clear sections
 - Use proper spacing for readability
+
+AUTOMATED DIAGNOSTICS:
+When you identify a problem that can be diagnosed automatically, suggest running diagnostics with this format:
+
+**🔍 Suggested Diagnostics:**
+• **Network Test** - I can run ping tests and DNS checks
+• **System Health Check** - I can check running processes and system resources
+• **Disk Space Analysis** - I can analyze storage usage
+• **Network Configuration** - I can check network settings
+
+**Would you like me to run these diagnostics automatically?** (I'll ask for permission before each command)
 
 For {os_type}, you can suggest these diagnostic commands:
 - Network: ipconfig/ifconfig, ping, nslookup, netstat
@@ -99,6 +117,13 @@ I can help you troubleshoot your network connection! Here's what we can do:
 • Network Test - Check connectivity
 • Ping Test - Test internet access
 • DNS Lookup - Verify DNS resolution
+
+**🔍 Suggested Diagnostics:**
+• **Network Connectivity Test** - I can run ping tests to google.com and other servers
+• **DNS Resolution Check** - I can test DNS resolution for common domains
+• **Network Configuration** - I can check your current network settings
+
+**Would you like me to run these diagnostics automatically?** (I'll ask for permission before each command)
 
 **Step-by-Step Process:**
 1. First, let's check your network configuration
@@ -230,3 +255,21 @@ Please describe your issue in detail, and I'll help you resolve it!"""
                 return category
         
         return 'general' 
+
+    def _add_diagnostic_suggestions(self, bot_response: str, user_message: str) -> str:
+        """Add diagnostic suggestions to the bot response"""
+        # Categorize the user's issue
+        issue_category = self.automated_diagnostics.categorize_user_issue(user_message)
+        
+        # Get suggested diagnostics
+        suggestions = self.automated_diagnostics.get_suggested_diagnostics(issue_category)
+        
+        if suggestions:
+            # Format diagnostic suggestions
+            diagnostic_text = self.automated_diagnostics.format_diagnostic_suggestions(suggestions)
+            
+            # Add to response if not already present
+            if "🔍 Suggested Diagnostics:" not in bot_response:
+                bot_response += "\n\n" + diagnostic_text
+        
+        return bot_response 

@@ -9,3 +9,12 @@ __pycache__
 *.pyzw
 *.pyzwz
 *.pyzwzw
+chat.db
+chat.db-shm
+chat.db-wal
+chat.db-journal
+chat.db-lock
+chat.db-trace
+chat.db-trace.lock
+chat.db-trace.lock.lock
+chat.db-trace.lock.lock.lock
