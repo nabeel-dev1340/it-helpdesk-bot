@@ -109,6 +109,20 @@ def network_test():
         logger.error(f"Error in network test: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/network-test/macos')
+def network_test_macos():
+    """Get macOS-specific network information"""
+    try:
+        os_type = os_detector.detect_os()
+        if os_type.lower() != 'darwin':
+            return jsonify({'error': 'This endpoint is only for macOS'}), 400
+        
+        results = network_tools.get_macos_network_info()
+        return jsonify(results)
+    except Exception as e:
+        logger.error(f"Error in macOS network test: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/diagnostics/suggest', methods=['POST'])
 def suggest_diagnostics():
     """Get suggested diagnostics based on user message"""

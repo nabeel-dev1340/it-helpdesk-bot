@@ -55,7 +55,10 @@ class Config:
     MACOS_COMMANDS = [
         'ifconfig', 'ping', 'nslookup', 'system_profiler', 'ps',
         'diskutil', 'netstat', 'traceroute', 'route', 'arp',
-        'networksetup', 'scutil', 'ls', 'cat', 'echo', 'df'
+        'networksetup', 'scutil', 'ls', 'cat', 'echo', 'df',
+        'top', 'vm_stat', 'ioreg', 'system_profiler', 'sw_vers',
+        'uname', 'hostname', 'whoami', 'pwd', 'ls', 'du',
+        'networksetup', 'airport', 'defaults', 'launchctl'
     ]
     
     LINUX_COMMANDS = [

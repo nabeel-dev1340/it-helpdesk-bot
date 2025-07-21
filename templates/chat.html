@@ -695,6 +695,9 @@
                             <button class="btn btn-outline-secondary btn-sm" onclick="executeCommand('ipconfig')">
                                 <i class="fas fa-ethernet me-1"></i>Network Config
                             </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="runMacOSNetworkTest()" id="macos-network-btn" style="display: none;">
+                                <i class="fab fa-apple me-1"></i>macOS Network Info
+                            </button>
                         </div>
                     </div>
                     
@@ -808,7 +811,16 @@ function loadSystemInfo() {
         .then(response => response.json())
         .then(data => {
             if (!data.error) {
-                document.getElementById('os-type').textContent = data.os_type;
+                const osType = data.os_type;
+                document.getElementById('os-type').textContent = osType;
+                
+                // Show macOS-specific buttons if on macOS
+                if (osType.toLowerCase().includes('darwin') || osType.toLowerCase().includes('mac')) {
+                    const macosBtn = document.getElementById('macos-network-btn');
+                    if (macosBtn) {
+                        macosBtn.style.display = 'block';
+                    }
+                }
             }
         })
         .catch(error => {
@@ -1405,6 +1417,8 @@ function runNetworkTest() {
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('ping google.com -n 4');
+    } else if (osType.includes('darwin') || osType.includes('mac')) {
+        executeCommand('ping -c 4 google.com');
     } else {
         executeCommand('ping -c 4 google.com');
     }
@@ -1427,6 +1441,8 @@ function runProcessCheck() {
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('tasklist');
+    } else if (osType.includes('darwin') || osType.includes('mac')) {
+        executeCommand('ps aux --sort=-%cpu | head -20');
     } else {
         executeCommand('ps aux --sort=-%cpu | head -20');
     }
@@ -1437,6 +1453,8 @@ function runDiskSpaceCheck() {
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('wmic logicaldisk get size,freespace,caption');
+    } else if (osType.includes('darwin') || osType.includes('mac')) {
+        executeCommand('df -h');
     } else {
         executeCommand('df -h');
     }
@@ -1657,6 +1675,79 @@ function getCacheStats() {
 function testCommand() {
     console.log('Testing command execution...');
     executeCommand('echo "Hello World"');
+}
+
+function runMacOSNetworkTest() {
+    // Show loading state first
+    const messageId = 'macos-network-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>🍎 macOS Network Information...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Getting macOS-specific network details...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    fetch('/api/network-test/macos')
+        .then(response => response.json())
+        .then(data => {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                if (data.error) {
+                    messageElement.innerHTML = `
+                        <strong>❌ macOS Network Test Failed</strong><br>
+                        <div class="command-output command-error">${data.error}</div>
+                    `;
+                } else {
+                    let output = '<strong>🍎 macOS Network Information:</strong><br>';
+                    
+                    if (data.wifi_info) {
+                        output += '<br><strong>WiFi Information:</strong><br>';
+                        output += `<div class="command-output command-success">${data.wifi_info}</div>`;
+                    }
+                    
+                    if (data.network_services) {
+                        output += '<br><strong>Network Services:</strong><br>';
+                        output += `<div class="command-output command-success">${data.network_services}</div>`;
+                    }
+                    
+                    messageElement.innerHTML = `
+                        <strong>✅ macOS Network Info Retrieved</strong><br>
+                        ${output}
+                    `;
+                }
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    <strong>❌ macOS Network Test Failed</strong><br>
+                    <div class="command-output command-error">Error getting macOS network information. Please try again.</div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
 }
 </script>
 {% endblock %} 

@@ -98,6 +98,9 @@ class NetworkTools:
         try:
             if self.os_type == 'windows':
                 command = 'ipconfig /all'
+            elif self.os_type == 'darwin':
+                # Use macOS-specific commands for network config
+                command = 'ifconfig && networksetup -listallnetworkservices'
             else:
                 command = 'ifconfig'
             
@@ -106,7 +109,7 @@ class NetworkTools:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=15
             )
             
             return {
@@ -121,6 +124,39 @@ class NetworkTools:
                 'output': '',
                 'error': str(e)
             }
+    
+    def get_macos_network_info(self):
+        """Get detailed network information for macOS"""
+        try:
+            if self.os_type != 'darwin':
+                return {'error': 'This method is only for macOS'}
+            
+            # Get WiFi information
+            wifi_info = subprocess.run(
+                '/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport -I',
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # Get network services
+            network_services = subprocess.run(
+                'networksetup -listallnetworkservices',
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            return {
+                'wifi_info': wifi_info.stdout if wifi_info.returncode == 0 else 'Unable to get WiFi info',
+                'network_services': network_services.stdout if network_services.returncode == 0 else 'Unable to get network services',
+                'success': True
+            }
+        except Exception as e:
+            logger.error(f"Error getting macOS network info: {str(e)}")
+            return {'error': str(e)}
     
     def _test_internet_connectivity(self):
         """Test basic internet connectivity"""
@@ -211,6 +247,9 @@ class NetworkTools:
         try:
             if self.os_type == 'windows':
                 command = 'ipconfig'
+            elif self.os_type == 'darwin':
+                # Use networksetup for macOS for better interface info
+                command = 'networksetup -listallnetworkservices'
             else:
                 command = 'ifconfig'
             

@@ -99,6 +99,10 @@ class SystemCommands:
         if any(cmd in command_lower for cmd in ['systeminfo', 'system_profiler', 'sfc', 'chkdsk']):
             return Config.SLOW_COMMAND_TIMEOUT
         
+        # macOS-specific slow commands
+        if self.os_type == 'darwin' and any(cmd in command_lower for cmd in ['system_profiler', 'diskutil', 'ioreg']):
+            return Config.SLOW_COMMAND_TIMEOUT
+        
         # Default timeout
         return Config.COMMAND_TIMEOUT
     
@@ -130,6 +134,11 @@ class SystemCommands:
         """Check if command is suitable for caching"""
         command_lower = command.lower()
         quick_commands = ['ping', 'nslookup', 'ipconfig', 'ifconfig', 'echo', 'uname', 'df']
+        
+        # Add macOS-specific quick commands
+        if self.os_type == 'darwin':
+            quick_commands.extend(['hostname', 'whoami', 'pwd', 'sw_vers'])
+        
         return any(cmd in command_lower for cmd in quick_commands)
     
     def get_system_info(self):
