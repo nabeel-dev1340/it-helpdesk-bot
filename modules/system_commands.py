@@ -2,6 +2,7 @@ import subprocess
 import platform
 import logging
 import psutil
+import time
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -12,10 +13,20 @@ class SystemCommands:
     def __init__(self):
         """Initialize system commands handler"""
         self.os_type = platform.system().lower()
+        self.command_cache = {}  # Simple cache for quick commands
+        self.cache_timeout = 30  # Cache for 30 seconds
     
     def execute_command(self, command):
-        """Execute a system command safely with timeout and validation"""
+        """Execute a system command safely with optimized timeouts"""
         try:
+            # Check cache first for quick commands
+            cache_key = f"{command}_{self.os_type}"
+            if cache_key in self.command_cache:
+                cache_entry = self.command_cache[cache_key]
+                if time.time() - cache_entry['timestamp'] < self.cache_timeout:
+                    logger.info(f"Using cached result for command: {command}")
+                    return cache_entry['result']
+            
             # Validate command before execution
             if not self._is_command_safe(command):
                 return {
@@ -24,13 +35,16 @@ class SystemCommands:
                     'error': 'Security validation failed'
                 }
             
-            # Execute command with timeout
+            # Determine timeout based on command type
+            timeout = self._get_command_timeout(command)
+            
+            # Execute command with optimized timeout
             result = subprocess.run(
                 command,
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=Config.COMMAND_TIMEOUT
+                timeout=timeout
             )
             
             # Truncate output if too long
@@ -38,18 +52,28 @@ class SystemCommands:
             if len(output) > Config.MAX_COMMAND_OUTPUT:
                 output = output[:Config.MAX_COMMAND_OUTPUT] + "\n... (output truncated)"
             
-            return {
+            result_data = {
                 'success': result.returncode == 0,
                 'output': output,
                 'error': result.stderr if result.stderr else None,
-                'return_code': result.returncode
+                'return_code': result.returncode,
+                'execution_time': time.time()
             }
+            
+            # Cache quick commands
+            if self._is_quick_command(command):
+                self.command_cache[cache_key] = {
+                    'result': result_data,
+                    'timestamp': time.time()
+                }
+            
+            return result_data
             
         except subprocess.TimeoutExpired:
             return {
                 'success': False,
                 'output': '',
-                'error': f'Command timed out after {Config.COMMAND_TIMEOUT} seconds'
+                'error': f'Command timed out after {timeout} seconds'
             }
         except Exception as e:
             logger.error(f"Error executing command '{command}': {str(e)}")
@@ -58,6 +82,55 @@ class SystemCommands:
                 'output': '',
                 'error': f'Command execution failed: {str(e)}'
             }
+    
+    def _get_command_timeout(self, command):
+        """Get appropriate timeout for command type"""
+        command_lower = command.lower()
+        
+        # Quick commands - fast timeout
+        if any(cmd in command_lower for cmd in ['ping', 'nslookup', 'ipconfig', 'ifconfig', 'echo']):
+            return Config.QUICK_COMMAND_TIMEOUT
+        
+        # Medium commands - moderate timeout
+        if any(cmd in command_lower for cmd in ['tasklist', 'ps', 'df', 'free', 'uname']):
+            return Config.MEDIUM_COMMAND_TIMEOUT
+        
+        # Slow commands - longer timeout
+        if any(cmd in command_lower for cmd in ['systeminfo', 'system_profiler', 'sfc', 'chkdsk']):
+            return Config.SLOW_COMMAND_TIMEOUT
+        
+        # Default timeout
+        return Config.COMMAND_TIMEOUT
+    
+    def clear_cache(self):
+        """Clear the command cache"""
+        self.command_cache.clear()
+        logger.info("Command cache cleared")
+    
+    def get_cache_stats(self):
+        """Get cache statistics"""
+        current_time = time.time()
+        valid_entries = 0
+        expired_entries = 0
+        
+        for cache_entry in self.command_cache.values():
+            if current_time - cache_entry['timestamp'] < self.cache_timeout:
+                valid_entries += 1
+            else:
+                expired_entries += 1
+        
+        return {
+            'total_entries': len(self.command_cache),
+            'valid_entries': valid_entries,
+            'expired_entries': expired_entries,
+            'cache_timeout': self.cache_timeout
+        }
+    
+    def _is_quick_command(self, command):
+        """Check if command is suitable for caching"""
+        command_lower = command.lower()
+        quick_commands = ['ping', 'nslookup', 'ipconfig', 'ifconfig', 'echo', 'uname', 'df']
+        return any(cmd in command_lower for cmd in quick_commands)
     
     def get_system_info(self):
         """Get basic system information"""
@@ -99,72 +172,83 @@ class SystemCommands:
             return {}
     
     def _is_command_safe(self, command):
-        """Check if command is safe to execute"""
+        """Validate if command is safe to execute"""
         command_lower = command.lower()
         
         # Check for blocked patterns
         for pattern in Config.BLOCKED_PATTERNS:
-            if pattern.lower() in command_lower:
+            if pattern in command_lower:
                 logger.warning(f"Blocked command pattern detected: {pattern}")
                 return False
         
-        # Check against approved commands for the OS
+        # Check OS-specific allowed commands
         if self.os_type == 'windows':
-            approved_commands = Config.WINDOWS_COMMANDS
-        elif self.os_type == 'darwin':  # macOS
-            approved_commands = Config.MACOS_COMMANDS
+            allowed_commands = Config.WINDOWS_COMMANDS
+        elif self.os_type == 'darwin':
+            allowed_commands = Config.MACOS_COMMANDS
         else:
-            # For Linux, use the configured commands
-            approved_commands = Config.LINUX_COMMANDS
+            allowed_commands = Config.LINUX_COMMANDS
         
-        # Check if command starts with an approved command
-        for approved_cmd in approved_commands:
-            if command_lower.startswith(approved_cmd):
+        # Check if command starts with an allowed command
+        for allowed_cmd in allowed_commands:
+            if command_lower.startswith(allowed_cmd):
                 return True
         
-        logger.warning(f"Command not in approved list: {command}")
+        logger.warning(f"Command not in allowed list: {command}")
         return False
     
     def get_network_info(self):
-        """Get network interface information"""
+        """Get network information"""
         try:
             network_info = {}
-            for interface, addresses in psutil.net_if_addrs().items():
-                network_info[interface] = []
-                for addr in addresses:
-                    if addr.family == psutil.AF_INET:  # IPv4
-                        network_info[interface].append({
-                            'address': addr.address,
-                            'netmask': addr.netmask,
-                            'family': 'IPv4'
-                        })
+            
+            # Get network interfaces
+            if self.os_type == 'windows':
+                result = subprocess.run('ipconfig', shell=True, capture_output=True, text=True, timeout=10)
+                network_info['interfaces'] = result.stdout
+            else:
+                result = subprocess.run('ifconfig', shell=True, capture_output=True, text=True, timeout=10)
+                network_info['interfaces'] = result.stdout
+            
+            # Get routing table
+            try:
+                if self.os_type == 'windows':
+                    route_result = subprocess.run('route print', shell=True, capture_output=True, text=True, timeout=10)
+                else:
+                    route_result = subprocess.run('netstat -rn', shell=True, capture_output=True, text=True, timeout=10)
+                network_info['routing'] = route_result.stdout
+            except:
+                network_info['routing'] = "Unable to get routing information"
+            
             return network_info
         except Exception as e:
             logger.error(f"Error getting network info: {str(e)}")
-            return {}
+            return {'error': str(e)}
     
     def get_process_list(self):
         """Get list of running processes"""
         try:
-            processes = []
-            for proc in psutil.process_iter(['pid', 'name', 'cpu_percent', 'memory_percent']):
-                try:
-                    processes.append(proc.info)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            return processes[:50]  # Limit to first 50 processes
+            if self.os_type == 'windows':
+                result = subprocess.run('tasklist /v', shell=True, capture_output=True, text=True, timeout=15)
+            else:
+                result = subprocess.run('ps aux --sort=-%cpu | head -20', shell=True, capture_output=True, text=True, timeout=15)
+            
+            return {
+                'success': result.returncode == 0,
+                'output': result.stdout,
+                'error': result.stderr if result.stderr else None
+            }
         except Exception as e:
             logger.error(f"Error getting process list: {str(e)}")
-            return []
+            return {'error': str(e)}
     
     def format_command_output(self, output, command_type):
         """Format command output for better display"""
         if not output:
-            return "No output"
+            return "No output available"
         
-        # Add command type context
-        formatted_output = f"Command: {command_type}\n"
-        formatted_output += "=" * 50 + "\n"
-        formatted_output += output
+        # Truncate very long outputs
+        if len(output) > 2000:
+            output = output[:2000] + "\n... (output truncated for display)"
         
-        return formatted_output 
+        return output 

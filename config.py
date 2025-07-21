@@ -24,6 +24,12 @@ class Config:
     COMMAND_TIMEOUT = 30  # seconds
     MAX_COMMAND_OUTPUT = 10000  # characters
     
+    # Quick tool optimizations
+    QUICK_COMMAND_TIMEOUT = 10  # seconds for fast commands
+    MEDIUM_COMMAND_TIMEOUT = 15  # seconds for medium commands
+    SLOW_COMMAND_TIMEOUT = 30  # seconds for slow commands
+    CACHE_TIMEOUT = 30  # seconds for command caching
+    
     # WebSocket settings
     SOCKETIO_ASYNC_MODE = 'threading'
     

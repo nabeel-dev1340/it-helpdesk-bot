@@ -80,6 +80,26 @@ def execute_command():
         logger.error(f"Error executing command: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_cache():
+    """Clear the command cache"""
+    try:
+        system_commands.clear_cache()
+        return jsonify({'success': True, 'message': 'Cache cleared successfully'})
+    except Exception as e:
+        logger.error(f"Error clearing cache: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cache/stats')
+def get_cache_stats():
+    """Get cache statistics"""
+    try:
+        stats = system_commands.get_cache_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/network-test')
 def network_test():
     try:

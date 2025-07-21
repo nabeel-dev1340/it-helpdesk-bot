@@ -420,6 +420,45 @@
     background: #fff8f8;
 }
 
+.command-loading {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-top: 8px;
+    color: #6c757d;
+    font-style: italic;
+}
+
+.command-loading .spinner-border {
+    color: #667eea;
+}
+
+/* Ensure Bootstrap spinner is visible */
+.spinner-border-sm {
+    width: 1rem;
+    height: 1rem;
+    border-width: 0.2em;
+}
+
+.spinner-border {
+    display: inline-block;
+    width: 2rem;
+    height: 2rem;
+    vertical-align: text-bottom;
+    border: 0.25em solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+}
+
+@keyframes spinner-border {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .chat-input-container {
     position: relative;
     margin-top: 10px;
@@ -670,6 +709,21 @@
                             </button>
                         </div>
                     </div>
+                    
+                    <div class="mb-3">
+                        <h6>Performance</h6>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-info btn-sm" onclick="clearCache()">
+                                <i class="fas fa-broom me-1"></i>Clear Cache
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="getCacheStats()">
+                                <i class="fas fa-chart-bar me-1"></i>Cache Stats
+                            </button>
+                            <button class="btn btn-outline-warning btn-sm" onclick="testCommand()">
+                                <i class="fas fa-vial me-1"></i>Test Command
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -838,13 +892,20 @@ function addMessage(sender, content, timestamp = null) {
         }
     }
     
-    messageDiv.innerHTML = `
-        <div class="message-bubble">
-            ${formattedContent}
-            <div class="message-time">${timeString}</div>
-        </div>
-    `;
+    // Create the message bubble
+    const messageBubble = document.createElement('div');
+    messageBubble.className = 'message-bubble';
     
+    // Set innerHTML for the bubble content - this allows HTML to be rendered
+    messageBubble.innerHTML = formattedContent;
+    
+    // Add timestamp
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'message-time';
+    timeDiv.textContent = timeString;
+    messageBubble.appendChild(timeDiv);
+    
+    messageDiv.appendChild(messageBubble);
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
@@ -1242,32 +1303,105 @@ function clearChat() {
 }
 
 function executeCommand(command) {
+    // Show immediate feedback
+    const messageId = 'cmd-' + Date.now();
+    
+    // Create the initial message with loading state
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>🔧 Running Command:</strong> ${command}<br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Executing command...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    // Set a timeout for the request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     fetch('/api/execute-command', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ command: command })
+        body: JSON.stringify({ command: command }),
+        signal: controller.signal
     })
-    .then(response => response.json())
+    .then(response => {
+        clearTimeout(timeoutId);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
     .then(data => {
+        console.log('Command execution result:', data);
         const output = data.success ? data.output : data.error;
         const cssClass = data.success ? 'command-success' : 'command-error';
+        const icon = data.success ? '✅' : '❌';
         
-        addMessage('bot', `
-            <strong>Command:</strong> ${command}<br>
-            <div class="command-output ${cssClass}">${output}</div>
-        `);
+        // Update the existing message
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            console.log('Updating message element with ID:', messageId);
+            // Create the content properly
+            const content = `
+                <strong>${icon} Command Completed:</strong> ${command}<br>
+                <div class="command-output ${cssClass}">${output}</div>
+            `;
+            messageElement.innerHTML = content;
+            
+            // Scroll to show the updated message
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            console.error('Message element not found with ID:', messageId);
+        }
     })
     .catch(error => {
-        console.error('Error:', error);
-        addMessage('bot', 'Error executing command. Please try again.');
+        clearTimeout(timeoutId);
+        console.error('Command execution error:', error);
+        
+        // Update the existing message with error
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            console.log('Updating message element with error for ID:', messageId);
+            const errorContent = `
+                <strong>❌ Command Failed:</strong> ${command}<br>
+                <div class="command-output command-error">
+                    ${error.name === 'AbortError' ? 'Command timed out after 15 seconds' : 'Error executing command. Please try again.'}
+                </div>
+            `;
+            messageElement.innerHTML = errorContent;
+            
+            // Scroll to show the updated message
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            console.error('Message element not found for error with ID:', messageId);
+        }
     });
 }
 
 function runNetworkTest() {
-    addMessage('bot', '<strong>Running Network Test...</strong>');
-    // Use OS-specific ping command
+    // Use OS-specific ping command with immediate feedback
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('ping google.com -n 4');
@@ -1277,8 +1411,7 @@ function runNetworkTest() {
 }
 
 function runSystemInfo() {
-    addMessage('bot', '<strong>Getting System Information...</strong>');
-    // Use OS-specific system info command
+    // Use OS-specific system info command with immediate feedback
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('systeminfo');
@@ -1290,8 +1423,7 @@ function runSystemInfo() {
 }
 
 function runProcessCheck() {
-    addMessage('bot', '<strong>Checking Running Processes...</strong>');
-    // Use OS-specific process list command
+    // Use OS-specific process list command with immediate feedback
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('tasklist');
@@ -1301,8 +1433,7 @@ function runProcessCheck() {
 }
 
 function runDiskSpaceCheck() {
-    addMessage('bot', '<strong>Checking Disk Space...</strong>');
-    // Use OS-specific disk space command
+    // Use OS-specific disk space command with immediate feedback
     const osType = document.getElementById('os-type').textContent.toLowerCase();
     if (osType.includes('windows')) {
         executeCommand('wmic logicaldisk get size,freespace,caption');
@@ -1312,37 +1443,220 @@ function runDiskSpaceCheck() {
 }
 
 function runNetworkDiagnostics() {
+    // Show loading state first
+    const messageId = 'network-test-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>🌐 Running Full Network Test...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Testing connectivity and DNS resolution...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
     fetch('/api/network-test')
         .then(response => response.json())
         .then(data => {
-            if (data.error) {
-                addMessage('bot', `Network diagnostics failed: ${data.error}`);
-            } else {
-                let output = '<strong>Network Diagnostics Results:</strong><br>';
-                
-                if (data.connectivity) {
-                    output += '<br><strong>Internet Connectivity:</strong><br>';
-                    Object.entries(data.connectivity).forEach(([host, result]) => {
-                        const status = result.success ? '✓' : '✗';
-                        output += `${status} ${host}<br>`;
-                    });
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                if (data.error) {
+                    messageElement.innerHTML = `
+                        <strong>❌ Network Diagnostics Failed</strong><br>
+                        <div class="command-output command-error">${data.error}</div>
+                    `;
+                } else {
+                    let output = '<strong>🌐 Network Diagnostics Results:</strong><br>';
+                    
+                    if (data.connectivity) {
+                        output += '<br><strong>Internet Connectivity:</strong><br>';
+                        Object.entries(data.connectivity).forEach(([host, result]) => {
+                            const status = result.success ? '✅' : '❌';
+                            output += `${status} ${host}<br>`;
+                        });
+                    }
+                    
+                    if (data.dns) {
+                        output += '<br><strong>DNS Resolution:</strong><br>';
+                        Object.entries(data.dns).forEach(([domain, result]) => {
+                            const status = result.success ? '✅' : '❌';
+                            output += `${status} ${domain}<br>`;
+                        });
+                    }
+                    
+                    messageElement.innerHTML = `
+                        <strong>✅ Network Test Completed</strong><br>
+                        <div class="command-output command-success">${output}</div>
+                    `;
                 }
-                
-                if (data.dns) {
-                    output += '<br><strong>DNS Resolution:</strong><br>';
-                    Object.entries(data.dns).forEach(([domain, result]) => {
-                        const status = result.success ? '✓' : '✗';
-                        output += `${status} ${domain}<br>`;
-                    });
-                }
-                
-                addMessage('bot', output);
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            addMessage('bot', 'Error running network diagnostics. Please try again.');
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    <strong>❌ Network Test Failed</strong><br>
+                    <div class="command-output command-error">Error running network diagnostics. Please try again.</div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
         });
+}
+
+function clearCache() {
+    // Show loading state first
+    const messageId = 'clear-cache-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>🧹 Clearing Cache...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Clearing command cache...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    fetch('/api/cache/clear', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            if (data.success) {
+                messageElement.innerHTML = `
+                    <strong>✅ Cache Cleared Successfully</strong><br>
+                    <div class="command-output command-success">Command cache has been cleared. Quick tools will now run fresh commands.</div>
+                `;
+            } else {
+                messageElement.innerHTML = `
+                    <strong>❌ Cache Clear Failed</strong><br>
+                    <div class="command-output command-error">Error: ${data.error}</div>
+                `;
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            messageElement.innerHTML = `
+                <strong>❌ Cache Clear Failed</strong><br>
+                <div class="command-output command-error">Error clearing cache. Please try again.</div>
+            `;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    });
+}
+
+function getCacheStats() {
+    // Show loading state first
+    const messageId = 'cache-stats-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>📊 Getting Cache Statistics...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Retrieving cache information...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    fetch('/api/cache/stats')
+        .then(response => response.json())
+        .then(data => {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                if (data.error) {
+                    messageElement.innerHTML = `
+                        <strong>❌ Cache Stats Error</strong><br>
+                        <div class="command-output command-error">Error: ${data.error}</div>
+                    `;
+                } else {
+                    messageElement.innerHTML = `
+                        <strong>📊 Cache Statistics:</strong><br>
+                        <div class="command-output command-success">
+                            Total Entries: ${data.total_entries}<br>
+                            Valid Entries: ${data.valid_entries}<br>
+                            Expired Entries: ${data.expired_entries}<br>
+                            Cache Timeout: ${data.cache_timeout} seconds
+                        </div>
+                    `;
+                }
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    <strong>❌ Cache Stats Error</strong><br>
+                    <div class="command-output command-error">Error getting cache statistics. Please try again.</div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+}
+
+// Test function to verify command execution
+function testCommand() {
+    console.log('Testing command execution...');
+    executeCommand('echo "Hello World"');
 }
 </script>
 {% endblock %} 
