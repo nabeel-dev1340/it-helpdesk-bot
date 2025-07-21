@@ -23,6 +23,28 @@ automated_diagnostics = AutomatedDiagnostics()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def cleanup_old_sessions():
+    """Clean up old sessions periodically"""
+    try:
+        chat_handler.chat_database.cleanup_old_sessions(days=30)
+        logger.info("Cleaned up old sessions")
+    except Exception as e:
+        logger.error(f"Error cleaning up sessions: {str(e)}")
+
+# Schedule cleanup every 24 hours
+import threading
+import time
+
+def schedule_cleanup():
+    """Schedule periodic cleanup of old sessions"""
+    while True:
+        time.sleep(24 * 60 * 60)  # 24 hours
+        cleanup_old_sessions()
+
+# Start cleanup thread
+cleanup_thread = threading.Thread(target=schedule_cleanup, daemon=True)
+cleanup_thread.start()
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -49,12 +71,13 @@ def chat_endpoint():
     try:
         data = request.get_json()
         user_message = data.get('message', '')
+        session_id = data.get('session_id', None)
         
         if not user_message:
             return jsonify({'error': 'No message provided'}), 400
         
         os_type = os_detector.detect_os()
-        response = chat_handler.process_message(user_message, os_type)
+        response = chat_handler.process_message(user_message, os_type, session_id)
         
         return jsonify({'response': response})
     except Exception as e:
@@ -98,6 +121,54 @@ def get_cache_stats():
         return jsonify(stats)
     except Exception as e:
         logger.error(f"Error getting cache stats: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/create', methods=['POST'])
+def create_session():
+    """Create a new chat session"""
+    try:
+        data = request.get_json()
+        os_type = data.get('os_type', os_detector.detect_os())
+        
+        # Generate session ID
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        # Create session in database
+        chat_handler.chat_database.create_session(session_id, os_type)
+        
+        return jsonify({
+            'session_id': session_id,
+            'os_type': os_type,
+            'message': 'Session created successfully'
+        })
+    except Exception as e:
+        logger.error(f"Error creating session: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/<session_id>/history')
+def get_session_history(session_id):
+    """Get conversation history for a session"""
+    try:
+        history = chat_handler.chat_database.get_conversation_history(session_id, limit=20)
+        session_info = chat_handler.chat_database.get_session_info(session_id)
+        
+        return jsonify({
+            'session_info': session_info,
+            'history': history
+        })
+    except Exception as e:
+        logger.error(f"Error getting session history: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/session/stats')
+def get_session_stats():
+    """Get session statistics"""
+    try:
+        stats = chat_handler.chat_database.get_session_stats()
+        return jsonify(stats)
+    except Exception as e:
+        logger.error(f"Error getting session stats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/network-test')
@@ -231,11 +302,13 @@ def handle_disconnect():
 def handle_message(data):
     try:
         user_message = data.get('message', '')
+        session_id = data.get('session_id', None)
+        
         if not user_message:
             return
         
         os_type = os_detector.detect_os()
-        response = chat_handler.process_message(user_message, os_type)
+        response = chat_handler.process_message(user_message, os_type, session_id)
         
         emit('bot_response', {
             'message': response,

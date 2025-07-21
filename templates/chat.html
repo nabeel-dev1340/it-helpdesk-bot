@@ -725,6 +725,9 @@
                             <button class="btn btn-outline-warning btn-sm" onclick="testCommand()">
                                 <i class="fas fa-vial me-1"></i>Test Command
                             </button>
+                            <button class="btn btn-outline-info btn-sm" onclick="getSessionStats()">
+                                <i class="fas fa-database me-1"></i>Session Stats
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -739,11 +742,13 @@
 let socket;
 let isConnected = false;
 let pendingDiagnostics = [];
+let currentSessionId = null;
 
 // Initialize WebSocket connection
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocket();
     loadSystemInfo();
+    createNewSession();
 });
 
 function initializeSocket() {
@@ -828,6 +833,26 @@ function loadSystemInfo() {
         });
 }
 
+function createNewSession() {
+    fetch('/api/session/create', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.session_id) {
+            currentSessionId = data.session_id;
+            console.log('Created new session:', currentSessionId);
+        }
+    })
+    .catch(error => {
+        console.error('Error creating session:', error);
+    });
+}
+
 function sendMessage() {
     const input = document.getElementById('message-input');
     const message = input.value.trim();
@@ -844,7 +869,10 @@ function sendMessage() {
     // Send message via WebSocket if connected
     if (isConnected && socket) {
         try {
-            socket.emit('send_message', { message: message });
+            socket.emit('send_message', { 
+                message: message,
+                session_id: currentSessionId 
+            });
         } catch (error) {
             console.error('WebSocket send error:', error);
             // Fallback to REST API
@@ -862,7 +890,10 @@ function sendMessageViaAPI(message) {
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: message })
+        body: JSON.stringify({ 
+            message: message,
+            session_id: currentSessionId 
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -1665,6 +1696,72 @@ function getCacheStats() {
                 messageElement.innerHTML = `
                     <strong>❌ Cache Stats Error</strong><br>
                     <div class="command-output command-error">Error getting cache statistics. Please try again.</div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        });
+}
+
+function getSessionStats() {
+    // Show loading state first
+    const messageId = 'session-stats-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>💾 Getting Session Statistics...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Retrieving session information...</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    fetch('/api/session/stats')
+        .then(response => response.json())
+        .then(data => {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                if (data.error) {
+                    messageElement.innerHTML = `
+                        <strong>❌ Session Stats Error</strong><br>
+                        <div class="command-output command-error">Error: ${data.error}</div>
+                    `;
+                } else {
+                    messageElement.innerHTML = `
+                        <strong>💾 Session Statistics:</strong><br>
+                        <div class="command-output command-success">
+                            Total Messages: ${data.total_messages}<br>
+                            Total Sessions: ${data.total_sessions}<br>
+                            Active Sessions (24h): ${data.active_sessions}<br>
+                            Current Session ID: ${currentSessionId || 'Not set'}
+                        </div>
+                    `;
+                }
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                messageElement.innerHTML = `
+                    <strong>❌ Session Stats Error</strong><br>
+                    <div class="command-output command-error">Error getting session statistics. Please try again.</div>
                 `;
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
