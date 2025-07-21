@@ -47,6 +47,21 @@ class ChatDatabase:
                     )
                 ''')
                 
+                # Create command_executions table
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS command_executions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT,
+                        command TEXT,
+                        description TEXT,
+                        output TEXT,
+                        error TEXT,
+                        success BOOLEAN,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (session_id) REFERENCES sessions (session_id)
+                    )
+                ''')
+                
                 # Create indexes for better performance
                 cursor.execute('''
                     CREATE INDEX IF NOT EXISTS idx_session_id 
@@ -233,3 +248,34 @@ class ChatDatabase:
         except Exception as e:
             logger.error(f"Error getting session stats: {str(e)}")
             return {} 
+
+    def store_command_execution(self, session_id, command, description, output, error, success):
+        """Store command execution results in database"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO command_executions 
+                    (session_id, command, description, output, error, success, timestamp)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (session_id, command, description, output, error, success, datetime.now()))
+                conn.commit()
+        except Exception as e:
+            logger.error(f"Error storing command execution: {str(e)}")
+    
+    def get_command_executions(self, session_id, limit=10):
+        """Get command executions for a session"""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT command, description, output, error, success, timestamp
+                    FROM command_executions 
+                    WHERE session_id = ?
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (session_id, limit))
+                return cursor.fetchall()
+        except Exception as e:
+            logger.error(f"Error getting command executions: {str(e)}")
+            return [] 

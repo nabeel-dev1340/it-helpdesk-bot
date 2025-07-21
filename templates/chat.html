@@ -567,6 +567,70 @@
 .chat-messages::-webkit-scrollbar-thumb:hover {
     background: #a8a8a8;
 }
+
+/* Run command buttons */
+.run-command-btn {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.run-command-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.run-command-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.run-command-btn .fa-spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Command container styling */
+.command-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.command-container code {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+}
+
+/* Responsive design for command buttons */
+@media (max-width: 768px) {
+    .command-container {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .command-container code {
+        min-width: auto;
+        margin-bottom: 8px;
+    }
+    
+    .run-command-btn {
+        align-self: flex-start;
+    }
+}
 </style>
 {% endblock %}
 
@@ -580,9 +644,9 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
                             <img src="{{ url_for('static', filename='assets/logo.png') }}" alt="Pingpal Logo" class="chat-header-logo me-2">
-                            <h5 class="mb-0">
+                        <h5 class="mb-0">
                                 Pingpal
-                            </h5>
+                        </h5>
                         </div>
                         <div class="d-flex align-items-center">
                             <div id="connection-status" class="me-3">
@@ -777,9 +841,24 @@ function initializeSocket() {
             isConnected = false;
         });
         
+        // In initializeSocket, update bot_response handler to support {message: {...}, timestamp: ...} structure
         socket.on('bot_response', function(data) {
             hideTypingIndicator();
-            addMessage('bot', data.message, data.timestamp);
+            let payload = data;
+            if (typeof data === 'string') {
+                try { payload = JSON.parse(data); } catch (e) { payload = { response: data }; }
+            }
+            // If payload has a .message property, use that as the real payload
+            if (payload && payload.message) {
+                payload = payload.message;
+            }
+            let responseText = '';
+            if (payload && typeof payload.response === 'string') {
+                responseText = payload.response;
+            } else if (payload && payload.response) {
+                responseText = String(payload.response);
+            }
+            addMessage('bot', responseText, null, payload.system_commands);
         });
         
         socket.on('error', function(data) {
@@ -850,7 +929,7 @@ function createNewSession() {
     })
     .catch(error => {
         console.error('Error creating session:', error);
-    });
+        });
 }
 
 function sendMessage() {
@@ -897,11 +976,21 @@ function sendMessageViaAPI(message) {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('Received response from API:', data);
         hideTypingIndicator();
+        let responseText = '';
+        if (data && typeof data.response === 'string') {
+            responseText = data.response;
+        } else if (data && data.response) {
+            responseText = String(data.response);
+        }
         if (data.error) {
+            console.error('API returned error:', data.error);
             addMessage('bot', 'Sorry, I encountered an error. Please try again.');
         } else {
-            addMessage('bot', data.response);
+            console.log('Adding bot message with response:', responseText);
+            console.log('System commands:', data.system_commands);
+            addMessage('bot', responseText, null, data.system_commands);
         }
     })
     .catch(error => {
@@ -916,7 +1005,11 @@ function sendQuickMessage(message) {
     sendMessage();
 }
 
-function addMessage(sender, content, timestamp = null) {
+function addMessage(sender, content, timestamp = null, systemCommands = []) {
+    // Defensive: always ensure content is a string
+    if (typeof content !== 'string') {
+        content = content ? String(content) : '';
+    }
     const messagesContainer = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}`;
@@ -928,18 +1021,11 @@ function addMessage(sender, content, timestamp = null) {
     let formattedContent = content;
     if (sender === 'bot') {
         formattedContent = formatBotMessage(content);
-        
-        // Check for diagnostic suggestions and add permission dialogs
-        if (content.includes('🔍 Suggested Diagnostics:')) {
-            formattedContent += createDiagnosticPermissionDialog();
-        }
     }
     
     // Create the message bubble
     const messageBubble = document.createElement('div');
     messageBubble.className = 'message-bubble';
-    
-    // Set innerHTML for the bubble content - this allows HTML to be rendered
     messageBubble.innerHTML = formattedContent;
     
     // Add timestamp
@@ -951,79 +1037,51 @@ function addMessage(sender, content, timestamp = null) {
     messageDiv.appendChild(messageBubble);
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+    // Render system commands as cards below the message
+    if (sender === 'bot' && systemCommands && systemCommands.length > 0) {
+        systemCommands.forEach((cmd, idx) => {
+            renderCommandCard(cmd, idx);
+        });
+    }
 }
 
 function formatBotMessage(content) {
+    if (!content) return '';
     // Use marked.js for markdown rendering
     if (typeof marked !== 'undefined') {
-        // Configure marked options
-        marked.setOptions({
-            breaks: true,
-            gfm: true
-        });
-        
-        // Convert markdown to HTML
+        marked.setOptions({ breaks: true, gfm: true });
         let formatted = marked.parse(content);
-        
-        // Custom formatting for specific elements
-        // Bold text (**text**) - ensure it's properly styled
         formatted = formatted.replace(/<strong>(.*?)<\/strong>/g, '<strong style="color: #2c3e50; font-weight: 600;">$1</strong>');
-        
-        // Code blocks - enhance styling
         formatted = formatted.replace(/<code>(.*?)<\/code>/g, '<code style="background: #f7fafc; color: #e53e3e; padding: 2px 6px; border-radius: 4px; font-family: \'Courier New\', monospace; font-size: 0.9em; border: 1px solid #e2e8f0;">$1</code>');
-        
-        // Headers - enhance styling
         formatted = formatted.replace(/<h([1-6])>(.*?)<\/h[1-6]>/g, '<h$1 style="color: #1a202c; margin-top: 16px; margin-bottom: 8px; font-weight: 600;">$2</h$1>');
-        
-        // Lists - enhance styling
         formatted = formatted.replace(/<ul>(.*?)<\/ul>/g, '<ul style="margin: 12px 0; padding-left: 20px;">$1</ul>');
         formatted = formatted.replace(/<ol>(.*?)<\/ol>/g, '<ol style="margin: 12px 0; padding-left: 20px;">$1</ol>');
         formatted = formatted.replace(/<li>(.*?)<\/li>/g, '<li style="margin: 6px 0; line-height: 1.5;">$1</li>');
-        
-        // Paragraphs - enhance spacing
         formatted = formatted.replace(/<p>(.*?)<\/p>/g, '<p style="margin: 8px 0; line-height: 1.6;">$1</p>');
-        
         return formatted;
     } else {
-        // Fallback to basic formatting if marked.js is not available
         let formatted = content;
-        
-        // Bold text (**text**)
         formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        
-        // Code blocks (`code`)
         formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-        
-        // Headers (# Header)
         formatted = formatted.replace(/^# (.*$)/gm, '<h4>$1</h4>');
         formatted = formatted.replace(/^## (.*$)/gm, '<h5>$1</h5>');
         formatted = formatted.replace(/^### (.*$)/gm, '<h6>$1</h6>');
-        
-        // Bullet points (• item)
         formatted = formatted.replace(/^• (.*$)/gm, '<li>$1</li>');
-        
-        // Numbered lists (1. item)
         formatted = formatted.replace(/^\d+\. (.*$)/gm, '<li>$1</li>');
-        
-        // Wrap lists in ul/ol tags
         formatted = formatted.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-        
-        // Line breaks
         formatted = formatted.replace(/\n\n/g, '</p><p>');
         formatted = formatted.replace(/\n/g, '<br>');
-        
-        // Wrap in paragraph tags if not already wrapped
         if (!formatted.includes('<h') && !formatted.includes('<ul') && !formatted.includes('<code')) {
             formatted = `<p>${formatted}</p>`;
         }
-        
-        // Clean up empty paragraphs
         formatted = formatted.replace(/<p><\/p>/g, '');
         formatted = formatted.replace(/<p><br><\/p>/g, '');
-        
         return formatted;
     }
 }
+
+
 
 function createDiagnosticPermissionDialog() {
     return `
@@ -1407,7 +1465,7 @@ function executeCommand(command) {
             // Create the content properly
             const content = `
                 <strong>${icon} Command Completed:</strong> ${command}<br>
-                <div class="command-output ${cssClass}">${output}</div>
+            <div class="command-output ${cssClass}">${output}</div>
             `;
             messageElement.innerHTML = content;
             
@@ -1439,6 +1497,90 @@ function executeCommand(command) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         } else {
             console.error('Message element not found for error with ID:', messageId);
+        }
+    });
+}
+
+function executeSuggestedCommand(command, description) {
+    // Show loading state first
+    const messageId = 'command-execution-' + Date.now();
+    
+    const messagesContainer = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble">
+            <div id="${messageId}">
+                <strong>🛠️ Executing Command...</strong><br>
+                <div class="command-loading">
+                    <div class="spinner-border spinner-border-sm me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span>Running: ${description || command}</span>
+                </div>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(messageDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    
+    fetch('/api/command/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            command: command,
+            description: description,
+            session_id: currentSessionId 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            if (data.error) {
+                messageElement.innerHTML = `
+                    <strong>❌ Command Execution Failed</strong><br>
+                    <div class="command-output command-error">
+                        <strong>Command:</strong> ${command}<br>
+                        <strong>Error:</strong> ${data.error}
+                    </div>
+                `;
+            } else {
+                let output = `<strong>✅ Command Executed Successfully</strong><br>`;
+                output += `<div class="command-output command-success">`;
+                output += `<strong>Command:</strong> ${command}<br>`;
+                if (description) {
+                    output += `<strong>Description:</strong> ${description}<br>`;
+                }
+                output += `<strong>Output:</strong><br>`;
+                output += `<pre>${data.output}</pre>`;
+                if (data.error) {
+                    output += `<strong>Error:</strong> ${data.error}`;
+                }
+                output += `</div>`;
+                
+                messageElement.innerHTML = output;
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        const messageElement = document.getElementById(messageId);
+        if (messageElement) {
+            messageElement.innerHTML = `
+                <strong>❌ Command Execution Failed</strong><br>
+                <div class="command-output command-error">Error executing command. Please try again.</div>
+            `;
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     });
 }
@@ -1525,30 +1667,30 @@ function runNetworkDiagnostics() {
         .then(data => {
             const messageElement = document.getElementById(messageId);
             if (messageElement) {
-                if (data.error) {
+            if (data.error) {
                     messageElement.innerHTML = `
                         <strong>❌ Network Diagnostics Failed</strong><br>
                         <div class="command-output command-error">${data.error}</div>
                     `;
-                } else {
+            } else {
                     let output = '<strong>🌐 Network Diagnostics Results:</strong><br>';
-                    
-                    if (data.connectivity) {
-                        output += '<br><strong>Internet Connectivity:</strong><br>';
-                        Object.entries(data.connectivity).forEach(([host, result]) => {
+                
+                if (data.connectivity) {
+                    output += '<br><strong>Internet Connectivity:</strong><br>';
+                    Object.entries(data.connectivity).forEach(([host, result]) => {
                             const status = result.success ? '✅' : '❌';
-                            output += `${status} ${host}<br>`;
-                        });
-                    }
-                    
-                    if (data.dns) {
-                        output += '<br><strong>DNS Resolution:</strong><br>';
-                        Object.entries(data.dns).forEach(([domain, result]) => {
+                        output += `${status} ${host}<br>`;
+                    });
+                }
+                
+                if (data.dns) {
+                    output += '<br><strong>DNS Resolution:</strong><br>';
+                    Object.entries(data.dns).forEach(([domain, result]) => {
                             const status = result.success ? '✅' : '❌';
-                            output += `${status} ${domain}<br>`;
-                        });
-                    }
-                    
+                        output += `${status} ${domain}<br>`;
+                    });
+                }
+                
                     messageElement.innerHTML = `
                         <strong>✅ Network Test Completed</strong><br>
                         <div class="command-output command-success">${output}</div>
@@ -1845,6 +1987,113 @@ function runMacOSNetworkTest() {
                 messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
         });
+}
+
+function renderCommandCard(cmd, idx) {
+    const messagesContainer = document.getElementById('chat-messages');
+    const cardDiv = document.createElement('div');
+    cardDiv.className = 'command-container';
+    cardDiv.style.marginBottom = '12px';
+    cardDiv.style.background = '#f8f9fa';
+    cardDiv.style.border = '1px solid #e9ecef';
+    cardDiv.style.borderRadius = '8px';
+    cardDiv.style.padding = '12px';
+    cardDiv.style.display = 'flex';
+    cardDiv.style.flexDirection = 'column';
+    cardDiv.style.gap = '8px';
+
+    // Command code block
+    const codeBlock = document.createElement('code');
+    codeBlock.textContent = cmd.command;
+    codeBlock.style.background = '#f7fafc';
+    codeBlock.style.color = '#e53e3e';
+    codeBlock.style.padding = '6px 10px';
+    codeBlock.style.borderRadius = '6px';
+    codeBlock.style.fontFamily = 'Courier New, monospace';
+    codeBlock.style.fontSize = '1em';
+    codeBlock.style.border = '1px solid #e2e8f0';
+    codeBlock.style.marginBottom = '4px';
+    cardDiv.appendChild(codeBlock);
+
+    // Description
+    if (cmd.description) {
+        const desc = document.createElement('div');
+        desc.textContent = cmd.description;
+        desc.style.color = '#4a5568';
+        desc.style.fontSize = '0.95em';
+        desc.style.marginBottom = '4px';
+        cardDiv.appendChild(desc);
+    }
+
+    // Run button
+    const buttonId = `run-command-btn-${Date.now()}-${idx}`;
+    const runBtn = document.createElement('button');
+    runBtn.id = buttonId;
+    runBtn.className = 'btn btn-sm btn-outline-primary run-command-btn';
+    runBtn.innerHTML = '<i class="fas fa-play me-1"></i>Run';
+    runBtn.onclick = function() {
+        runCommandFromCard(cmd.command, buttonId, cardDiv);
+    };
+    cardDiv.appendChild(runBtn);
+
+    // Result area
+    const resultDiv = document.createElement('div');
+    resultDiv.className = 'command-result-area';
+    resultDiv.style.marginTop = '8px';
+    cardDiv.appendChild(resultDiv);
+
+    messagesContainer.appendChild(cardDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function runCommandFromCard(command, buttonId, cardDiv) {
+    const runBtn = document.getElementById(buttonId);
+    const resultDiv = cardDiv.querySelector('.command-result-area');
+    if (runBtn) {
+        runBtn.disabled = true;
+        runBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Running...';
+        runBtn.className = 'btn btn-sm btn-outline-warning run-command-btn';
+    }
+    if (resultDiv) {
+        resultDiv.innerHTML = '<div class="command-loading"><div class="spinner-border spinner-border-sm me-2" role="status"><span class="visually-hidden">Loading...</span></div>Executing command...</div>';
+    }
+    fetch('/api/command/execute', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            command: command,
+            description: `Command from chat: ${command}`,
+            session_id: currentSessionId 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i class="fas fa-play me-1"></i>Run';
+            runBtn.className = 'btn btn-sm btn-outline-primary run-command-btn';
+        }
+        if (resultDiv) {
+            if (data.error) {
+                resultDiv.innerHTML = `<div class="command-output command-error"><strong>Error:</strong> ${data.error}</div>`;
+            } else {
+                let output = `<div class="command-output command-success"><strong>Output:</strong><br><pre>${data.output}</pre></div>`;
+                resultDiv.innerHTML = output;
+            }
+        }
+    })
+    .catch(error => {
+        if (runBtn) {
+            runBtn.disabled = false;
+            runBtn.innerHTML = '<i class="fas fa-play me-1"></i>Run';
+            runBtn.className = 'btn btn-sm btn-outline-primary run-command-btn';
+        }
+        if (resultDiv) {
+            resultDiv.innerHTML = `<div class="command-output command-error">Error executing command. Please try again.</div>`;
+        }
+    });
 }
 </script>
 {% endblock %} 

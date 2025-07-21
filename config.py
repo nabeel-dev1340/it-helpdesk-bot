@@ -47,24 +47,132 @@ class Config:
     
     # Approved commands by OS
     WINDOWS_COMMANDS = [
-        'ipconfig', 'ping', 'nslookup', 'systeminfo', 'tasklist',
-        'sfc', 'chkdsk', 'netstat', 'tracert', 'route', 'arp',
-        'getmac', 'wmic', 'dir', 'type', 'echo'
+        # Network commands
+        'ipconfig', 'ping', 'nslookup', 'netstat', 'tracert', 'route', 'arp',
+        'getmac', 'netsh', 'netstat -an', 'ipconfig /flushdns',
+        
+        # System commands
+        'systeminfo', 'tasklist', 'sfc', 'chkdsk', 'dir', 'type', 'echo',
+        'wmic', 'systeminfo', 'ver', 'hostname', 'whoami', 'pwd',
+        
+        # Hardware commands
+        'wmic printer list brief', 'wmic logicaldisk get size,freespace,caption',
+        'wmic cpu get name', 'wmic memorychip get capacity', 'wmic bios get version',
+        'wmic path win32_pnpentity get name,status', 'devmgmt.msc',
+        'wmic sounddev get name', 'wmic diskdrive get size',
+        
+        # Performance commands
+        'tasklist /v', 'wmic process get name,processid,workingsetsize',
+        'wmic cpu get loadpercentage', 'perfmon', 'resmon',
+        
+        # Security commands
+        'sfc /scannow', 'DISM /Online /Cleanup-Image /RestoreHealth',
+        'wmic qfe get hotfixid', 'gpresult /r',
+        
+        # File system commands
+        'dir C:\\ /s', 'tree', 'attrib', 'copy', 'move', 'del',
+        
+        # Service commands
+        'sc query', 'net start', 'net stop', 'services.msc',
+        
+        # Registry commands
+        'reg query', 'reg add', 'reg delete',
+        
+        # User management
+        'net user', 'net localgroup', 'whoami /all',
+        
+        # Event logs
+        'wevtutil qe system', 'wevtutil qe application',
+        
+        # Power management
+        'powercfg /list', 'powercfg /query',
+        
+        # Network diagnostics
+        'netsh wlan show profiles', 'netsh interface show interface',
+        'netsh advfirewall show allprofiles'
     ]
     
     MACOS_COMMANDS = [
-        'ifconfig', 'ping', 'nslookup', 'system_profiler', 'ps',
-        'diskutil', 'netstat', 'traceroute', 'route', 'arp',
-        'networksetup', 'scutil', 'ls', 'cat', 'echo', 'df',
-        'top', 'vm_stat', 'ioreg', 'system_profiler', 'sw_vers',
-        'uname', 'hostname', 'whoami', 'pwd', 'ls', 'du',
-        'networksetup', 'airport', 'defaults', 'launchctl'
+        # Network commands
+        'ifconfig', 'ping', 'nslookup', 'netstat', 'traceroute', 'route', 'arp',
+        'networksetup', 'scutil', 'airport', 'netstat -an',
+        
+        # System commands
+        'system_profiler', 'ps', 'df', 'free', 'ls', 'cat', 'echo',
+        'uname', 'hostname', 'whoami', 'pwd', 'sw_vers',
+        
+        # Hardware commands
+        'system_profiler SPHardwareDataType', 'system_profiler SPUSBDataType',
+        'system_profiler SPAudioDataType', 'system_profiler SPDisplaysDataType',
+        'ioreg', 'diskutil list', 'diskutil info',
+        
+        # Performance commands
+        'ps aux --sort=-%cpu | head -20', 'top -l 1', 'vm_stat',
+        'iostat', 'netstat -i', 'lsof -i',
+        
+        # Security commands
+        'sudo /usr/libexec/repair_packages --verify', 'system_profiler SPSoftwareDataType',
+        'sudo /usr/libexec/repair_packages --verify --standard-pkgs',
+        
+        # File system commands
+        'ls -la', 'du -sh', 'find', 'cp', 'mv', 'rm',
+        
+        # Service commands
+        'launchctl list', 'sudo launchctl load', 'sudo launchctl unload',
+        
+        # User management
+        'dscl . list /Users', 'id', 'groups',
+        
+        # System logs
+        'log show', 'sudo log show --predicate',
+        
+        # Power management
+        'pmset -g', 'pmset -g therm', 'pmset -g batt',
+        
+        # Network diagnostics
+        'networksetup -listallnetworkservices', 'networksetup -getinfo',
+        'sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder'
     ]
     
     LINUX_COMMANDS = [
+        # Network commands
         'ifconfig', 'ping', 'nslookup', 'ps', 'df', 'free',
-        'netstat', 'traceroute', 'route', 'arp', 'ls', 'cat',
-        'echo', 'uname', 'uptime', 'who', 'w', 'top'
+        'netstat', 'traceroute', 'route', 'arp', 'ip addr',
+        
+        # System commands
+        'uname', 'uptime', 'who', 'w', 'top', 'ls', 'cat',
+        'echo', 'ps aux', 'df -h', 'free -h',
+        
+        # Hardware commands
+        'lscpu', 'lsmem', 'lspci', 'lsusb', 'lshw',
+        'cat /proc/cpuinfo', 'cat /proc/meminfo',
+        
+        # Performance commands
+        'ps aux --sort=-%cpu | head -20', 'top -n 1',
+        'vmstat', 'iostat', 'netstat -i',
+        
+        # Security commands
+        'sudo apt update', 'sudo apt upgrade', 'sudo clamscan --recursive',
+        'sudo chkrootkit', 'sudo rkhunter --check',
+        
+        # File system commands
+        'ls -la', 'du -sh', 'find', 'cp', 'mv', 'rm',
+        
+        # Service commands
+        'systemctl status', 'systemctl list-units', 'service --status-all',
+        
+        # User management
+        'cat /etc/passwd', 'id', 'groups', 'who',
+        
+        # System logs
+        'journalctl', 'dmesg', 'tail -f /var/log/syslog',
+        
+        # Power management
+        'upower -i /org/freedesktop/UPower/devices/battery_BAT0',
+        
+        # Network diagnostics
+        'nmcli device status', 'nmcli connection show',
+        'systemctl restart systemd-resolved'
     ]
     
     # Command patterns that are always blocked

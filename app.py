@@ -72,20 +72,16 @@ def chat_endpoint():
         data = request.get_json()
         user_message = data.get('message', '')
         session_id = data.get('session_id', None)
+        os_type = data.get('os_type', os_detector.detect_os())
         
-        if not user_message:
-            return jsonify({'error': 'No message provided'}), 400
-        
-        os_type = os_detector.detect_os()
-        response = chat_handler.process_message(user_message, os_type, session_id)
-        
-        return jsonify({'response': response})
+        result = chat_handler.process_message(user_message, os_type, session_id)
+        return jsonify(result)
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/execute-command', methods=['POST'])
-def execute_command():
+def execute_system_command():
     try:
         data = request.get_json()
         command = data.get('command', '')
@@ -287,6 +283,95 @@ def get_available_diagnostics():
         return jsonify(all_commands)
     except Exception as e:
         logger.error(f"Error getting available diagnostics: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/command/execute', methods=['POST'])
+def execute_gpt_command():
+    """Execute a command suggested by GPT-4o"""
+    try:
+        data = request.get_json()
+        command = data.get('command', '')
+        description = data.get('description', '')
+        session_id = data.get('session_id')
+        
+        if not command:
+            return jsonify({'error': 'No command provided'}), 400
+        
+        # Execute the command
+        result = system_commands.execute_command(command)
+        
+        # Store command execution in database
+        if session_id:
+            chat_handler.chat_database.store_command_execution(
+                session_id, command, description, 
+                result.get('output', ''), result.get('error', ''),
+                result.get('success', False)
+            )
+        
+        return jsonify({
+            'success': result.get('success', False),
+            'output': result.get('output', ''),
+            'error': result.get('error', ''),
+            'command': command,
+            'description': description
+        })
+        
+    except Exception as e:
+        logger.error(f"Error executing command: {str(e)}")
+        return jsonify({'error': f'Error executing command: {str(e)}'}), 500
+
+@app.route('/api/commands/get', methods=['GET'])
+def get_session_commands():
+    """Get commands for the current session"""
+    try:
+        session_id = request.args.get('session_id')
+        if not session_id:
+            return jsonify({'error': 'No session ID provided'}), 400
+        
+        # Get commands from database (you can implement this based on your storage)
+        # For now, return empty array
+        commands = []
+        
+        return jsonify({
+            'commands': commands,
+            'session_id': session_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting session commands: {str(e)}")
+        return jsonify({'error': f'Error getting commands: {str(e)}'}), 500
+
+@app.route('/api/test-json', methods=['POST'])
+def test_json_parsing():
+    """Test endpoint to verify JSON parsing"""
+    try:
+        data = request.get_json()
+        test_response = data.get('test_response', '')
+        
+        # Simulate the JSON parsing logic
+        import json
+        try:
+            parsed = json.loads(test_response)
+            response_text = parsed.get('response', '')
+            system_commands = parsed.get('system_commands', [])
+            escalation = parsed.get('escalation', False)
+            
+            return jsonify({
+                'success': True,
+                'parsed': {
+                    'response_text': response_text,
+                    'system_commands': system_commands,
+                    'escalation': escalation
+                }
+            })
+        except json.JSONDecodeError as e:
+            return jsonify({
+                'success': False,
+                'error': str(e),
+                'raw_response': test_response
+            })
+            
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @socketio.on('connect')
