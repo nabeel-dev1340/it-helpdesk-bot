@@ -808,6 +808,10 @@ let isConnected = false;
 let pendingDiagnostics = [];
 let currentSessionId = null;
 
+// Add global variables to track last user and bot messages
+let lastUserMessage = '';
+let lastBotResponse = '';
+
 // Initialize WebSocket connection
 document.addEventListener('DOMContentLoaded', function() {
     initializeSocket();
@@ -863,7 +867,7 @@ function initializeSocket() {
         
         socket.on('error', function(data) {
             hideTypingIndicator();
-            addMessage('bot', 'Sorry, I encountered an error. Please try again.', new Date().toISOString());
+            addMessage('bot', 'Sorry, I encountered an error. Please try again.');
         });
         
         // Set a timeout to fallback to REST API if WebSocket doesn't connect
@@ -1009,6 +1013,11 @@ function addMessage(sender, content, timestamp = null, systemCommands = []) {
     // Defensive: always ensure content is a string
     if (typeof content !== 'string') {
         content = content ? String(content) : '';
+    }
+    if (sender === 'user') {
+        lastUserMessage = content;
+    } else if (sender === 'bot') {
+        lastBotResponse = content;
     }
     const messagesContainer = document.getElementById('chat-messages');
     const messageDiv = document.createElement('div');
@@ -2083,6 +2092,8 @@ function runCommandFromCard(command, buttonId, cardDiv) {
                 resultDiv.innerHTML = output;
             }
         }
+        // Immediately ask the bot to analyze the command result
+        analyzeCommandResult(command, data.output, data.error, data.success);
     })
     .catch(error => {
         if (runBtn) {
@@ -2093,6 +2104,41 @@ function runCommandFromCard(command, buttonId, cardDiv) {
         if (resultDiv) {
             resultDiv.innerHTML = `<div class="command-output command-error">Error executing command. Please try again.</div>`;
         }
+    });
+}
+
+// New function to analyze command result with the bot
+function analyzeCommandResult(command, output, error, success) {
+    // Show a spinner bot message
+    addMessage('bot', 'Analyzing command result, please wait...');
+    fetch('/api/command/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            session_id: currentSessionId,
+            command: command,
+            output: output,
+            error: error,
+            success: success,
+            user_message: lastUserMessage,
+            previous_bot_response: lastBotResponse
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        // Remove the spinner message (last bot message)
+        const messagesContainer = document.getElementById('chat-messages');
+        const botMessages = messagesContainer.querySelectorAll('.message.bot');
+        if (botMessages.length > 0) {
+            const lastBot = botMessages[botMessages.length - 1];
+            if (lastBot && lastBot.textContent.includes('Analyzing command result')) {
+                lastBot.remove();
+            }
+        }
+        addMessage('bot', data.response);
+    })
+    .catch(error => {
+        addMessage('bot', 'Sorry, I could not analyze the command result.');
     });
 }
 </script>

@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, emit
 import logging
+from config import Config
 from modules.chat_handler import ChatHandler
 from modules.network_tools import NetworkTools
 from modules.system_commands import SystemCommands
@@ -319,6 +320,51 @@ def execute_gpt_command():
     except Exception as e:
         logger.error(f"Error executing command: {str(e)}")
         return jsonify({'error': f'Error executing command: {str(e)}'}), 500
+
+@app.route('/api/command/analyze', methods=['POST'])
+def analyze_command_result():
+    data = request.get_json()
+    session_id = data.get('session_id')
+    command = data.get('command')
+    output = data.get('output')
+    error = data.get('error')
+    success = data.get('success', True)
+    user_message = data.get('user_message', '')
+    previous_bot_response = data.get('previous_bot_response', '')
+
+    # Compose context for GPT-4o
+    context = [
+        {"role": "user", "content": user_message or "The user asked for help."},
+        {"role": "assistant", "content": previous_bot_response or "The assistant provided a diagnosis and suggested a command."},
+        {"role": "user", "content": f"I ran the command `{command}`. Here is the result:\nOutput:\n{output or '(no output)'}\nError:\n{error or 'None'}"}
+    ]
+    prompt = (
+        "Given the user's issue, your previous diagnosis, and the command result, "
+        "analyze the result and provide actionable insights or next steps. "
+        "If the issue is resolved, say so. If not, suggest what to try next."
+    )
+    context.insert(0, {"role": "system", "content": prompt})
+
+    # Call GPT-4o
+    try:
+        import openai
+        client=openai.OpenAI(api_key=Config.OPENAI_API_KEY)
+        response = client.chat.completions.create(
+            model=Config.OPENAI_MODEL,
+            messages=context,
+            max_tokens=Config.OPENAI_MAX_TOKENS,
+            temperature=Config.OPENAI_TEMPERATURE
+        )
+        bot_followup = response.choices[0].message.content
+        # Optionally store this in the session history
+        chat_handler.chat_database.store_message(
+            session_id, f"Command result for {command}", bot_followup, "system", "gpt_analysis"
+        )
+        return jsonify({"response": bot_followup})
+    except Exception as e:
+        import logging
+        logging.exception("Error in /api/command/analyze")
+        return jsonify({"response": "Sorry, I could not analyze the command result."}), 500
 
 @app.route('/api/commands/get', methods=['GET'])
 def get_session_commands():
