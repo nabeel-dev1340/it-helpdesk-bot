@@ -131,7 +131,35 @@ class Config:
         
         # Network diagnostics
         'networksetup -listallnetworkservices', 'networksetup -getinfo',
-        'sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder'
+        'sudo dscacheutil -flushcache', 'sudo killall -HUP mDNSResponder',
+        
+        # Additional macOS commands that may require sudo
+        'sudo system_profiler', 'sudo diskutil', 'sudo ioreg',
+        'sudo networksetup', 'sudo launchctl', 'sudo dscacheutil',
+        'sudo killall', 'sudo repair_packages', 'sudo log show',
+        'sudo pmset', 'sudo iostat', 'sudo vm_stat',
+        
+        # Printer commands
+        'lpstat -p', 'lpstat -a', 'lpstat -d',
+        'system_profiler SPPrintersDataType',
+        
+        # Audio commands
+        'system_profiler SPAudioDataType', 'system_profiler SPAudioDevicesDataType',
+        
+        # Bluetooth commands
+        'system_profiler SPBluetoothDataType',
+        
+        # Firewall commands
+        'sudo /usr/libexec/ApplicationFirewall/socketfilterfw',
+        
+        # System integrity protection
+        'csrutil status',
+        
+        # Gatekeeper status
+        'spctl --status',
+        
+        # XProtect status
+        'system_profiler SPInstallHistoryDataType'
     ]
     
     LINUX_COMMANDS = [

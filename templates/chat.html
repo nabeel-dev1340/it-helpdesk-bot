@@ -631,6 +631,115 @@
         align-self: flex-start;
     }
 }
+
+/* Network warning styling */
+.alert-warning {
+    background-color: #fff3cd;
+    border-color: #ffeaa7;
+    color: #856404;
+}
+
+.alert-warning strong {
+    color: #856404;
+}
+
+/* Command description styling */
+.command-description {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-top: 4px;
+    font-style: italic;
+}
+
+/* Category headers */
+.message-bubble strong {
+    color: #667eea;
+    font-size: 1.1em;
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* Ensure command containers work in bot messages */
+.message.bot .message-bubble .command-container {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.message.bot .message-bubble .command-container code {
+    flex: 1;
+    min-width: 200px;
+    margin: 0;
+    background: #f7fafc;
+    color: #e53e3e;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    border: 1px solid #e2e8f0;
+}
+
+.message.bot .message-bubble .command-description {
+    color: #6c757d;
+    font-size: 0.9em;
+    margin-top: 4px;
+    font-style: italic;
+    width: 100%;
+}
+
+.message.bot .message-bubble .run-command-btn {
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.message.bot .message-bubble .run-command-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Password prompt styling */
+.message.bot .message-bubble .password-prompt {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.message.bot .message-bubble .password-prompt input {
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.9em;
+}
+
+.message.bot .message-bubble .password-prompt .btn {
+    margin: 2px 0;
+    font-size: 0.8em;
+    padding: 4px 8px;
+}
+
+/* Sudo command styling */
+.message.bot .message-bubble .run-command-btn.btn-outline-warning {
+    border-color: #ffc107;
+    color: #856404;
+}
+
+.message.bot .message-bubble .run-command-btn.btn-outline-warning:hover {
+    background-color: #ffc107;
+    color: #856404;
+}
 </style>
 {% endblock %}
 
@@ -817,7 +926,113 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeSocket();
     loadSystemInfo();
     createNewSession();
+    checkNetworkStatus();
 });
+
+function checkNetworkStatus() {
+    fetch('/api/network/status')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.internet_available) {
+                showNetworkWarning();
+            }
+        })
+        .catch(error => {
+            console.error('Error checking network status:', error);
+            showNetworkWarning();
+        });
+}
+
+function showNetworkWarning() {
+    const messagesContainer = document.getElementById('chat-messages');
+    const warningDiv = document.createElement('div');
+    warningDiv.className = 'message bot';
+    
+    const time = new Date();
+    const timeString = time.toLocaleTimeString();
+    
+    warningDiv.innerHTML = `
+        <div class="message-bubble">
+            <div class="alert alert-warning" role="alert">
+                <strong>⚠️ No Internet Connection Detected</strong><br>
+                I can still help you troubleshoot network issues with local diagnostic commands.
+                <br><br>
+                <button class="btn btn-primary btn-sm" onclick="loadNetworkFallbackCommands()">
+                    <i class="fas fa-wifi me-1"></i>Load Network Diagnostics
+                </button>
+            </div>
+            <div class="message-time">${timeString}</div>
+        </div>
+    `;
+    
+    messagesContainer.appendChild(warningDiv);
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function loadNetworkFallbackCommands() {
+    fetch('/api/network/fallback-commands')
+        .then(response => response.json())
+        .then(data => {
+            const messagesContainer = document.getElementById('chat-messages');
+            const commandsDiv = document.createElement('div');
+            commandsDiv.className = 'message bot';
+            
+            const time = new Date();
+            const timeString = time.toLocaleTimeString();
+            
+            let commandsHtml = `
+                <div class="message-bubble">
+                    <strong>🔧 Network Diagnostic Commands for ${data.os_type}:</strong><br><br>
+            `;
+            
+            // Group commands by category
+            const categories = {};
+            data.commands.forEach(cmd => {
+                if (!categories[cmd.category]) {
+                    categories[cmd.category] = [];
+                }
+                categories[cmd.category].push(cmd);
+            });
+            
+            for (const [category, commands] of Object.entries(categories)) {
+                commandsHtml += `<strong>${category.replace('_', ' ').toUpperCase()}:</strong><br>`;
+                commands.forEach(cmd => {
+                    commandsHtml += `
+                        <div class="command-container">
+                            <code>${cmd.command}</code>
+                            <button class="btn btn-sm btn-outline-primary run-command-btn" onclick="executeCommand('${cmd.command}')">
+                                <i class="fas fa-play me-1"></i>Run
+                            </button>
+                            <div class="command-description">${cmd.description}</div>
+                        </div>
+                    `;
+                });
+                commandsHtml += '<br>';
+            }
+            
+            commandsHtml += `
+                <strong>📋 Troubleshooting Steps:</strong><br>
+                <ul>
+            `;
+            
+            data.troubleshooting_steps.forEach(step => {
+                commandsHtml += `<li>${step}</li>`;
+            });
+            
+            commandsHtml += `
+                </ul>
+                <div class="message-time">${timeString}</div>
+            </div>
+            `;
+            
+            commandsDiv.innerHTML = commandsHtml;
+            messagesContainer.appendChild(commandsDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        })
+        .catch(error => {
+            console.error('Error loading fallback commands:', error);
+        });
+}
 
 function initializeSocket() {
     try {
@@ -1057,6 +1272,13 @@ function addMessage(sender, content, timestamp = null, systemCommands = []) {
 
 function formatBotMessage(content) {
     if (!content) return '';
+    
+    // Check if content already contains HTML (like our fallback response)
+    if (content.includes('<div class="command-container">') || content.includes('<button')) {
+        // Content already has HTML, just return it with basic styling
+        return content;
+    }
+    
     // Use marked.js for markdown rendering
     if (typeof marked !== 'undefined') {
         marked.setOptions({ breaks: true, gfm: true });
@@ -1412,7 +1634,7 @@ function clearChat() {
     }
 }
 
-function executeCommand(command) {
+function executeCommand(command, password = null) {
     // Show immediate feedback
     const messageId = 'cmd-' + Date.now();
     
@@ -1446,12 +1668,18 @@ function executeCommand(command) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
+    // Prepare request body
+    const requestBody = { command: command };
+    if (password) {
+        requestBody.password = password;
+    }
+    
     fetch('/api/execute-command', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ command: command }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal
     })
     .then(response => {
@@ -1463,6 +1691,28 @@ function executeCommand(command) {
     })
     .then(data => {
         console.log('Command execution result:', data);
+        
+        // Check if password is required
+        if (data.requires_password) {
+            const messageElement = document.getElementById(messageId);
+            if (messageElement) {
+                const passwordPrompt = `
+                    <strong>🔐 Password Required:</strong> ${command}<br>
+                    <div class="command-output command-error">
+                        This command requires administrator privileges on macOS.<br>
+                        <div class="mt-2">
+                            <input type="password" id="sudo-password-${messageId}" class="form-control form-control-sm" placeholder="Enter your password">
+                            <button class="btn btn-primary btn-sm mt-2" onclick="executeCommandWithPassword('${command}', '${messageId}')">
+                                <i class="fas fa-key me-1"></i>Run with Password
+                            </button>
+                        </div>
+                    </div>
+                `;
+                messageElement.innerHTML = passwordPrompt;
+            }
+            return;
+        }
+        
         const output = data.success ? data.output : data.error;
         const cssClass = data.success ? 'command-success' : 'command-error';
         const icon = data.success ? '✅' : '❌';
@@ -1510,7 +1760,23 @@ function executeCommand(command) {
     });
 }
 
-function executeSuggestedCommand(command, description) {
+function executeCommandWithPassword(command, messageId) {
+    const passwordInput = document.getElementById(`sudo-password-${messageId}`);
+    const password = passwordInput.value;
+    
+    if (!password) {
+        alert('Please enter your password');
+        return;
+    }
+    
+    // Clear the password input for security
+    passwordInput.value = '';
+    
+    // Execute the command with password
+    executeCommand(command, password);
+}
+
+function executeSuggestedCommand(command, description, password = null) {
     // Show loading state first
     const messageId = 'command-execution-' + Date.now();
     
@@ -1539,21 +1805,45 @@ function executeSuggestedCommand(command, description) {
     messagesContainer.appendChild(messageDiv);
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
     
+    // Prepare request body
+    const requestBody = { 
+        command: command,
+        description: description,
+        session_id: currentSessionId 
+    };
+    if (password) {
+        requestBody.password = password;
+    }
+    
     fetch('/api/command/execute', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-            command: command,
-            description: description,
-            session_id: currentSessionId 
-        })
+        body: JSON.stringify(requestBody)
     })
     .then(response => response.json())
     .then(data => {
         const messageElement = document.getElementById(messageId);
         if (messageElement) {
+            // Check if password is required
+            if (data.requires_password) {
+                const passwordPrompt = `
+                    <strong>🔐 Password Required:</strong> ${command}<br>
+                    <div class="command-output command-error">
+                        This command requires administrator privileges on macOS.<br>
+                        <div class="mt-2">
+                            <input type="password" id="sudo-password-suggested-${messageId}" class="form-control form-control-sm" placeholder="Enter your password">
+                            <button class="btn btn-primary btn-sm mt-2" onclick="executeSuggestedCommandWithPassword('${command}', '${description}', '${messageId}')">
+                                <i class="fas fa-key me-1"></i>Run with Password
+                            </button>
+                        </div>
+                    </div>
+                `;
+                messageElement.innerHTML = passwordPrompt;
+                return;
+            }
+            
             if (data.error) {
                 messageElement.innerHTML = `
                     <strong>❌ Command Execution Failed</strong><br>
@@ -1592,6 +1882,74 @@ function executeSuggestedCommand(command, description) {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     });
+}
+
+function executeSuggestedCommandWithPassword(command, description, messageId) {
+    const passwordInput = document.getElementById(`sudo-password-suggested-${messageId}`);
+    const password = passwordInput.value;
+    
+    if (!password) {
+        alert('Please enter your password');
+        return;
+    }
+    
+    // Clear the password input for security
+    passwordInput.value = '';
+    
+    // Execute the command with password
+    executeSuggestedCommand(command, description, password);
+}
+
+function showPasswordPrompt(button) {
+    const commandContainer = button.closest('.command-container');
+    const passwordPrompt = commandContainer.querySelector('.password-prompt');
+    const runButton = commandContainer.querySelector('.run-command-btn');
+    
+    if (passwordPrompt) {
+        passwordPrompt.style.display = 'block';
+        runButton.style.display = 'none';
+    }
+}
+
+function cancelPasswordPrompt(button) {
+    const commandContainer = button.closest('.command-container');
+    const passwordPrompt = commandContainer.querySelector('.password-prompt');
+    const runButton = commandContainer.querySelector('.run-command-btn');
+    
+    if (passwordPrompt) {
+        passwordPrompt.style.display = 'none';
+        runButton.style.display = 'inline-block';
+        // Clear the password input
+        const passwordInput = passwordPrompt.querySelector('input[type="password"]');
+        if (passwordInput) {
+            passwordInput.value = '';
+        }
+    }
+}
+
+function executeCommandWithPasswordFromFallback(command, button) {
+    const commandContainer = button.closest('.command-container');
+    const passwordInput = commandContainer.querySelector('input[type="password"]');
+    const password = passwordInput.value;
+    
+    if (!password) {
+        alert('Please enter your password');
+        return;
+    }
+    
+    // Clear the password input for security
+    passwordInput.value = '';
+    
+    // Hide the password prompt
+    const passwordPrompt = commandContainer.querySelector('.password-prompt');
+    const runButton = commandContainer.querySelector('.run-command-btn');
+    if (passwordPrompt) {
+        passwordPrompt.style.display = 'none';
+        runButton.style.display = 'inline-block';
+    }
+    
+    // Execute the command with password
+    executeCommand(command, password);
 }
 
 function runNetworkTest() {

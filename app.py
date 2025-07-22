@@ -86,11 +86,26 @@ def execute_system_command():
     try:
         data = request.get_json()
         command = data.get('command', '')
+        password = data.get('password', None)
         
         if not command:
             return jsonify({'error': 'No command provided'}), 400
         
-        result = system_commands.execute_command(command)
+        # Set sudo password if provided for macOS
+        if password and os_detector.is_macos():
+            system_commands.set_sudo_password(password)
+        
+        # Check if command requires sudo on macOS
+        require_sudo = system_commands._requires_sudo(command) if os_detector.is_macos() else False
+        
+        result = system_commands.execute_command(command, require_sudo=require_sudo)
+        
+        if result.get('requires_password'):
+            return jsonify({
+                'success': False,
+                'error': 'Sudo password required for this command',
+                'requires_password': True
+            })
         
         if result['success']:
             return jsonify({'success': True, 'output': result['output']})
@@ -99,6 +114,25 @@ def execute_system_command():
     except Exception as e:
         logger.error(f"Error executing command: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/set-password', methods=['POST'])
+def set_sudo_password():
+    """Set sudo password for macOS commands"""
+    try:
+        data = request.get_json()
+        password = data.get('password', '')
+        
+        if not password:
+            return jsonify({'error': 'No password provided'}), 400
+        
+        if not os_detector.is_macos():
+            return jsonify({'error': 'Password setting is only available on macOS'}), 400
+        
+        system_commands.set_sudo_password(password)
+        return jsonify({'success': True, 'message': 'Password set successfully'})
+    except Exception as e:
+        logger.error(f"Error setting password: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/cache/clear', methods=['POST'])
 def clear_cache():
@@ -177,18 +211,36 @@ def network_test():
         logger.error(f"Error in network test: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/network-test/macos')
-def network_test_macos():
-    """Get macOS-specific network information"""
+@app.route('/api/network/status')
+def check_network_status():
+    """Check internet connectivity status"""
+    try:
+        internet_available = network_tools.check_internet_connectivity()
+        dns_working = network_tools.check_dns_resolution()
+        
+        return jsonify({
+            'internet_available': internet_available,
+            'dns_working': dns_working,
+            'status': 'connected' if internet_available else 'disconnected'
+        })
+    except Exception as e:
+        logger.error(f"Error checking network status: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/network/fallback-commands')
+def get_network_fallback_commands():
+    """Get fallback commands for network issues"""
     try:
         os_type = os_detector.detect_os()
-        if os_type.lower() != 'darwin':
-            return jsonify({'error': 'This endpoint is only for macOS'}), 400
+        fallback_data = network_tools.get_network_fallback_commands(os_type)
         
-        results = network_tools.get_macos_network_info()
-        return jsonify(results)
+        return jsonify({
+            'os_type': os_type,
+            'commands': fallback_data['diagnostic_commands'],
+            'troubleshooting_steps': fallback_data['troubleshooting_steps']
+        })
     except Exception as e:
-        logger.error(f"Error in macOS network test: {str(e)}")
+        logger.error(f"Error getting fallback commands: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/diagnostics/suggest', methods=['POST'])
@@ -233,9 +285,17 @@ def execute_diagnostic():
         data = request.get_json()
         command_name = data.get('command_name', '')
         command_text = data.get('command', '')
+        password = data.get('password', None)
         
         if not command_text:
             return jsonify({'error': 'No command provided'}), 400
+        
+        # Set sudo password if provided for macOS
+        if password and os_detector.is_macos():
+            system_commands.set_sudo_password(password)
+        
+        # Check if command requires sudo on macOS
+        require_sudo = system_commands._requires_sudo(command_text) if os_detector.is_macos() else False
         
         # Create a diagnostic command object
         diagnostic_cmd = DiagnosticCommand(
@@ -294,12 +354,20 @@ def execute_gpt_command():
         command = data.get('command', '')
         description = data.get('description', '')
         session_id = data.get('session_id')
+        password = data.get('password', None)
         
         if not command:
             return jsonify({'error': 'No command provided'}), 400
         
+        # Set sudo password if provided for macOS
+        if password and os_detector.is_macos():
+            system_commands.set_sudo_password(password)
+        
+        # Check if command requires sudo on macOS
+        require_sudo = system_commands._requires_sudo(command) if os_detector.is_macos() else False
+        
         # Execute the command
-        result = system_commands.execute_command(command)
+        result = system_commands.execute_command(command, require_sudo=require_sudo)
         
         # Store command execution in database
         if session_id:
@@ -314,7 +382,8 @@ def execute_gpt_command():
             'output': result.get('output', ''),
             'error': result.get('error', ''),
             'command': command,
-            'description': description
+            'description': description,
+            'requires_password': result.get('requires_password', False)
         })
         
     except Exception as e:

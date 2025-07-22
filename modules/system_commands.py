@@ -3,6 +3,8 @@ import platform
 import logging
 import psutil
 import time
+import getpass
+import os
 from config import Config
 
 logger = logging.getLogger(__name__)
@@ -15,12 +17,18 @@ class SystemCommands:
         self.os_type = platform.system().lower()
         self.command_cache = {}  # Simple cache for quick commands
         self.cache_timeout = 30  # Cache for 30 seconds
+        self.sudo_password = None  # Store sudo password for macOS
     
-    def execute_command(self, command):
+    def set_sudo_password(self, password):
+        """Set sudo password for macOS commands"""
+        self.sudo_password = password
+        logger.info("Sudo password set for macOS commands")
+    
+    def execute_command(self, command, require_sudo=False):
         """Execute a system command safely with optimized timeouts"""
         try:
             # Check cache first for quick commands
-            cache_key = f"{command}_{self.os_type}"
+            cache_key = f"{command}_{self.os_type}_{require_sudo}"
             if cache_key in self.command_cache:
                 cache_entry = self.command_cache[cache_key]
                 if time.time() - cache_entry['timestamp'] < self.cache_timeout:
@@ -34,6 +42,18 @@ class SystemCommands:
                     'output': 'Command not allowed for security reasons',
                     'error': 'Security validation failed'
                 }
+            
+            # Handle macOS sudo commands
+            if self.os_type == 'darwin' and require_sudo:
+                if not self.sudo_password:
+                    return {
+                        'success': False,
+                        'output': '',
+                        'error': 'Sudo password required for this command. Please provide your password.',
+                        'requires_password': True
+                    }
+                # Prepend sudo to command
+                command = f"echo '{self.sudo_password}' | sudo -S {command}"
             
             # Determine timeout based on command type
             timeout = self._get_command_timeout(command)
@@ -205,6 +225,19 @@ class SystemCommands:
         
         logger.warning(f"Command not in allowed list: {command}")
         return False
+    
+    def _requires_sudo(self, command):
+        """Check if command requires sudo on macOS"""
+        if self.os_type != 'darwin':
+            return False
+        
+        command_lower = command.lower()
+        sudo_commands = [
+            'sudo', 'system_profiler', 'diskutil', 'ioreg', 'launchctl',
+            'dscacheutil', 'killall', 'repair_packages', 'log show'
+        ]
+        
+        return any(cmd in command_lower for cmd in sudo_commands)
     
     def get_network_info(self):
         """Get network information"""
