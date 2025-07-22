@@ -789,8 +789,8 @@
                     
                     <!-- Quick Actions -->
                     <div class="quick-actions mx-3">
-                        <button class="btn btn-outline-primary btn-sm quick-action-btn" onclick="runNetworkTest()">
-                            <i class="fas fa-wifi me-1"></i>Network Test
+                        <button class="btn btn-outline-primary btn-sm quick-action-btn" onclick="runQuickPingTest()">
+                            <i class="fas fa-wifi me-1"></i>Ping Test
                         </button>
                         <button class="btn btn-outline-success btn-sm quick-action-btn" onclick="runSystemInfo()">
                             <i class="fas fa-server me-1"></i>System Info
@@ -847,7 +847,7 @@
                     <div class="mb-3">
                         <h6>System Commands</h6>
                         <div class="d-grid gap-2">
-                            <button class="btn btn-outline-primary btn-sm" onclick="executeCommand('ping google.com')">
+                            <button class="btn btn-outline-primary btn-sm" onclick="runQuickPingTest()">
                                 <i class="fas fa-wifi me-1"></i>Ping Test
                             </button>
                             <button class="btn btn-outline-success btn-sm" onclick="executeCommand('nslookup google.com')">
@@ -2498,6 +2498,15 @@ function analyzeCommandResult(command, output, error, success) {
     .catch(error => {
         addMessage('bot', 'Sorry, I could not analyze the command result.');
     });
+}
+
+function runQuickPingTest() {
+    const osType = document.getElementById('os-type').textContent.toLowerCase();
+    if (osType.includes('windows')) {
+        executeCommand('ping google.com -n 5');
+    } else {
+        executeCommand('ping -c 5 google.com');
+    }
 }
 </script>
 {% endblock %} 
